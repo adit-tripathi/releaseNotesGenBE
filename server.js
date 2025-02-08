@@ -122,6 +122,62 @@ Others:\n${commits.others.join('\n')}
   }
 });
 
+app.post('/api/generate-release-notes-v3', async (req, res) => {
+  const { repoUrl, filters } = req.body;
+  const { type, author, dateRange } = filters;
+
+  try {
+    const repoPath = repoUrl.replace('https://github.com/', '');
+    const commitsUrl = `https://api.github.com/repos/${repoPath}/commits?per_page=50`;
+
+    const response = await axios.get(commitsUrl);
+    const commits = response.data.map(commit => ({
+      message: commit.commit.message,
+      author: commit.commit.author.name,
+      date: commit.commit.author.date,
+    }));
+
+    // Apply filters
+    const filteredCommits = commits.filter(commit => {
+      const matchesType = !type || commit.message.startsWith(type);
+      const matchesAuthor = !author || commit.author === author;
+      const matchesDate =
+        (!dateRange.start || new Date(commit.date) >= new Date(dateRange.start)) &&
+        (!dateRange.end || new Date(commit.date) <= new Date(dateRange.end));
+      return matchesType && matchesAuthor && matchesDate;
+    });
+
+    // Group commits by type
+    const groupedCommits = {
+      features: filteredCommits.filter(commit => commit.message.startsWith('feat:')),
+      fixes: filteredCommits.filter(commit => commit.message.startsWith('fix:')),
+      chores: filteredCommits.filter(commit => commit.message.startsWith('chore:')),
+      others: filteredCommits.filter(commit =>
+        !['feat:', 'fix:', 'chore:'].some(prefix => commit.message.startsWith(prefix))
+      ),
+    };
+
+    // Generate a story-like summary
+    const summary = `
+We made some exciting updates to the project:
+- ${groupedCommits.features.length} new features were added to enhance functionality.
+- ${groupedCommits.fixes.length} pesky bugs were squashed to improve stability.
+- ${groupedCommits.chores.length} maintenance tasks were completed to keep things running smoothly.
+- ${groupedCommits.others.length} other changes were made to refine the project.
+    `.trim();
+
+    const notes = filteredCommits.map(commit => commit.message);
+
+    res.json({ notes, summary });
+  } catch (error) {
+    console.error('Error generating release notes:', error);
+    res.status(500).send('Failed to generate release notes.');
+  }
+});
+
+
+
+
 
 
 app.post("/api/generate-pdf", (req, res) => {
