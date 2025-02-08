@@ -39,4 +39,22 @@ app.post("/api/generate-release-notes", async (req, res) => {
   }
 });
 
+app.post("/api/generate-pdf", (req, res) => {
+  const { notes } = req.body;
+
+  if (!notes) {
+    return res.status(400).send("Notes are required to generate PDF");
+  }
+
+  const doc = new PDFDocument();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=release-notes.pdf");
+
+  doc.pipe(res);
+  doc.fontSize(16).text("Release Notes", { align: "center" });
+  doc.moveDown();
+  doc.fontSize(12).text(notes, { align: "left" });
+  doc.end();
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
